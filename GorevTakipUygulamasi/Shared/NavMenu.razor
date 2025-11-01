@@ -1,0 +1,102 @@
+﻿@using Microsoft.AspNetCore.Components.Authorization
+
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/">
+            <i class="fas fa-tasks me-2"></i>
+            Görev Takip
+        </a>
+        <button title="Menü" class="navbar-toggler" @onclick="ToggleNavMenu">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+    </div>
+</div>
+
+<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
+    <nav class="flex-column">
+        <AuthorizeView>
+            <Authorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
+                        <i class="fas fa-home me-2" aria-hidden="true"></i> Ana Sayfa
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="/tasks">
+                        <i class="fas fa-list me-2" aria-hidden="true"></i> Görevlerim
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="/add-task">
+                        <i class="fas fa-plus me-2" aria-hidden="true"></i> Yeni Görev
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="/gorevler">
+                        <i class="fas fa-tasks me-2" aria-hidden="true"></i> Görev Listesi
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="hatirlatici">
+                        <span class="oi oi-bell" aria-hidden="true"></span> Hatırlatıcı
+                    </NavLink>
+                </div>
+
+                <!-- Alt menü ayırıcısı -->
+                <hr class="nav-divider" />
+
+                <div class="nav-item px-3">
+                    <div class="nav-link disabled text-muted small">
+                        <i class="fas fa-user me-2"></i> @context.User.Identity?.Name
+                    </div>
+                </div>
+            </Authorized>
+            <NotAuthorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
+                        <i class="fas fa-home me-2" aria-hidden="true"></i> Ana Sayfa
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="/Identity/Account/Login">
+                        <i class="fas fa-sign-in-alt me-2" aria-hidden="true"></i> Giriş Yap
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="/Identity/Account/Register">
+                        <i class="fas fa-user-plus me-2" aria-hidden="true"></i> Kayıt Ol
+                    </NavLink>
+                </div>
+            </NotAuthorized>
+        </AuthorizeView>
+    </nav>
+</div>
+
+<style>
+    .nav-divider {
+        margin: 1rem 1.5rem;
+        border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .nav-link.disabled {
+        color: rgba(255, 255, 255, 0.5) !important;
+        cursor: default;
+    }
+
+    .nav-scrollable {
+        /* Sidebar'ın kaydırılabilir olması için */
+        max-height: calc(100vh - 3.5rem);
+        overflow-y: auto;
+    }
+</style>
+
+@code {
+    private bool collapseNavMenu = true;
+
+    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+
+    private void ToggleNavMenu()
+    {
+        collapseNavMenu = !collapseNavMenu;
+    }
+}

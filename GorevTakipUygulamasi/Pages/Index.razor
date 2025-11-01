@@ -1,0 +1,165 @@
+﻿@page "/"
+@using Microsoft.AspNetCore.Components.Authorization
+@inject NavigationManager Nav
+
+<PageTitle>Görev Takip Uygulaması</PageTitle>
+
+<div class="container py-5">
+    <!-- Hero Section -->
+    <div class="row align-items-center mb-5">
+        <div class="col-md-6">
+            <h1 class="display-4 fw-bold text-purple">Görev Takibinizi Kolaylaştırın</h1>
+            <p class="lead text-muted">
+                Basit, hızlı ve güvenli bir şekilde görevlerinizi oluşturun, yönetin ve tamamlayın.
+                Kişisel veya ekip halinde çalışmalarınızda üretkenliğinizi artırın.
+            </p>
+            <AuthorizeView>
+                <Authorized>
+                    <div class="d-flex gap-2 mt-4">
+                        <a href="/tasks" class="btn btn-primary btn-lg">
+                            <i class="fas fa-list me-2"></i>Görevlerime Git
+                        </a>
+                        <a href="/add-task" class="btn btn-outline-primary btn-lg">
+                            <i class="fas fa-plus me-2"></i>Yeni Görev Ekle
+                        </a>
+                    </div>
+                </Authorized>
+                <NotAuthorized>
+                    <div class="d-flex gap-2 mt-4">
+                        <a href="/Identity/Account/Register" class="btn btn-primary btn-lg">
+                            <i class="fas fa-user-plus me-2"></i>Hemen Başlayın
+                        </a>
+                        <a href="/Identity/Account/Login" class="btn btn-outline-primary btn-lg">
+                            <i class="fas fa-sign-in-alt me-2"></i>Giriş Yapın
+                        </a>
+                    </div>
+                </NotAuthorized>
+            </AuthorizeView>
+        </div>
+        <div class="col-md-6 text-center">
+            <img src="https://img.freepik.com/free-vector/task-concept-illustration_114360-22492.jpg"
+                 alt="Task Tracking Illustration" class="img-fluid hero-image" />
+        </div>
+    </div>
+
+    <!-- Features Section -->
+    <div class="row gy-4 mb-5">
+        <div class="col-md-4">
+            <div class="card h-100 shadow-sm feature-card">
+                <div class="card-body text-center">
+                    <div class="feature-icon mb-3">
+                        <i class="fas fa-plus-circle fa-3x text-purple"></i>
+                    </div>
+                    <h5 class="card-title">Kolay Görev Ekleme</h5>
+                    <p class="card-text text-muted">
+                        Sezgisel arayüz ile hızlıca görev oluşturun. Başlık, açıklama, tarih ve durum bilgilerini kolayca ekleyin.
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100 shadow-sm feature-card">
+                <div class="card-body text-center">
+                    <div class="feature-icon mb-3">
+                        <i class="fas fa-tasks fa-3x text-purple"></i>
+                    </div>
+                    <h5 class="card-title">Akıllı Durum Yönetimi</h5>
+                    <p class="card-text text-muted">
+                        Görevlerinizi "Beklemede", "Devam Ediyor" ve "Tamamlandı" durumları arasında organize edin ve takip edin.
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100 shadow-sm feature-card">
+                <div class="card-body text-center">
+                    <div class="feature-icon mb-3">
+                        <i class="fas fa-chart-line fa-3x text-purple"></i>
+                    </div>
+                    <h5 class="card-title">İstatistik & Takip</h5>
+                    <p class="card-text text-muted">
+                        Tamamladığınız görevlerin sayısını görün, ilerlemenizi takip edin ve verimliliğinizi artırın.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Section (sadece giriş yapmış kullanıcılar için) -->
+    <AuthorizeView>
+        <Authorized>
+            <div class="row">
+                <div class="col-12">
+                    <div class="card bg-gradient-purple text-white">
+                        <div class="card-body text-center py-4">
+                            <h4 class="card-title">
+                                <i class="fas fa-user-check me-2"></i>Hoş Geldin, @context.User.Identity?.Name!
+                            </h4>
+                            <p class="card-text mb-0">Görevlerinizi yönetmek için sidebar'dan ilgili sayfaya geçebilirsiniz.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </Authorized>
+    </AuthorizeView>
+</div>
+
+<style>
+    .text-purple {
+        color: #8e44ad !important;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #8e44ad 0%, #6c3483 100%);
+        border: none;
+        transition: all 0.3s ease;
+    }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #7d3c98 0%, #5b2c6f 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(142, 68, 173, 0.3);
+        }
+
+    .btn-outline-primary {
+        color: #8e44ad;
+        border-color: #8e44ad;
+        transition: all 0.3s ease;
+    }
+
+        .btn-outline-primary:hover {
+            background: linear-gradient(135deg, #8e44ad 0%, #6c3483 100%);
+            border-color: #8e44ad;
+            transform: translateY(-2px);
+        }
+
+    .feature-card {
+        border: none;
+        border-radius: 1rem;
+        transition: all 0.3s ease;
+    }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(142, 68, 173, 0.15) !important;
+        }
+
+    .feature-icon {
+        opacity: 0.8;
+    }
+
+    .card-title {
+        color: #2c3e50;
+        font-weight: 600;
+    }
+
+    .hero-image {
+        max-height: 400px;
+        filter: drop-shadow(0 10px 20px rgba(142, 68, 173, 0.1));
+    }
+
+    .bg-gradient-purple {
+        background: linear-gradient(135deg, #8e44ad 0%, #6c3483 100%);
+    }
+
+</style>

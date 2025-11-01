@@ -1,0 +1,161 @@
+﻿@page "/gorev-ekle"
+@page "/add-task"
+@using System.ComponentModel.DataAnnotations
+@using System.Security.Claims
+@using GorevTakipUygulamasi.Models
+@using GorevTakipUygulamasi.Services
+@using GorevTakipUygulamasi.Services.TaskServices
+@using Microsoft.AspNetCore.Identity
+@inject ITaskService TaskService
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Yeni Görev Ekle</PageTitle>
+
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="card-title mb-0">
+                        <i class="fas fa-plus-circle"></i> Yeni Görev Ekle
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <EditForm Model="@newTask" OnValidSubmit="@HandleValidSubmit">
+                        <DataAnnotationsValidator />
+
+                        <div class="mb-3">
+                            <label for="title" class="form-label">
+                                <i class="fas fa-heading"></i> Görev Başlığı *
+                            </label>
+                            <InputText id="title" class="form-control" @bind-Value="newTask.Title"
+                                       placeholder="Görev başlığını girin..." />
+                            <ValidationMessage For="@(() => newTask.Title)" class="text-danger" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="description" class="form-label">
+                                <i class="fas fa-align-left"></i> Açıklama
+                            </label>
+                            <InputTextArea id="description" class="form-control" @bind-Value="newTask.Description"
+                                           rows="4" placeholder="Görev hakkında detaylar..." />
+                            <ValidationMessage For="@(() => newTask.Description)" class="text-danger" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="status" class="form-label">
+                                <i class="fas fa-flag"></i> Durum
+                            </label>
+                            <InputSelect id="status" class="form-select" @bind-Value="newTask.Status">
+                                <option value="@Models.TaskStatus.Beklemede">Beklemede</option>
+                                <option value="@Models.TaskStatus.DevamEdiyor">Devam Ediyor</option>
+                            </InputSelect>
+                            <ValidationMessage For="@(() => newTask.Status)" class="text-danger" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="dueDate" class="form-label">
+                                <i class="fas fa-calendar-alt"></i> Son Teslim Tarihi
+                            </label>
+                            <InputDate id="dueDate" class="form-control" @bind-Value="newTask.DueDate" />
+                            <div class="form-text">İsteğe bağlı - boş bırakabilirsiniz</div>
+                            <ValidationMessage For="@(() => newTask.DueDate)" class="text-danger" />
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <button type="button" class="btn btn-secondary me-md-2" @onclick="Cancel">
+                                <i class="fas fa-times"></i> İptal
+                            </button>
+                            <button type="submit" class="btn btn-primary" disabled="@isSubmitting">
+                                @if (isSubmitting)
+                                {
+                                    <span class="spinner-border spinner-border-sm" role="status"></span>
+                                    <span>Kaydediliyor...</span>
+                                }
+                                else
+                                {
+                                    <i class="fas fa-save"></i>
+                                    <span>Kaydet</span>
+                                }
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+
+            <!-- Yardım Kutusu -->
+            <div class="alert alert-info mt-3">
+                <h6><i class="fas fa-info-circle"></i> İpuçları:</h6>
+                <ul class="mb-0">
+                    <li>Görev başlığı en fazla 200 karakter olabilir</li>
+                    <li>Açıklama alanı isteğe bağlıdır</li>
+                    <li>Son teslim tarihi belirlemek zorunda değilsiniz</li>
+                    <li>Görev durumunu daha sonra değiştirebilirsiniz</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private TaskItem newTask = new();
+    private string userId = string.Empty;
+    private bool isSubmitting = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        userId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
+
+        if (string.IsNullOrEmpty(userId))
+        {
+            Navigation.NavigateTo("/Identity/Account/Login");
+            return;
+        }
+
+        // Yeni görev için varsayılan değerler
+        newTask = new TaskItem
+        {
+            UserId = userId,
+            Status = Models.TaskStatus.Beklemede,
+            CreatedDate = DateTime.Now
+        };
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        if (isSubmitting) return;
+
+        try
+        {
+            isSubmitting = true;
+
+            // Kullanıcı ID'sini ata
+            newTask.UserId = userId;
+
+            // Görevi kaydet
+            var savedTask = await TaskService.CreateTaskAsync(newTask);
+
+            // Başarı mesajı
+            await JSRuntime.InvokeVoidAsync("alert", "Görev başarıyla eklendi!");
+
+            // Görevler sayfasına yönlendir
+            Navigation.NavigateTo("/gorevler");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Hata oluştu: {ex.Message}");
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo("/gorevler");
+    }
+}

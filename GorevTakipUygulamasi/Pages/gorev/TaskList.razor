@@ -1,0 +1,250 @@
+﻿@page "/gorevler"
+@page "/tasks"
+@using System.Security.Claims
+@using GorevTakipUygulamasi.Models
+@using GorevTakipUygulamasi.Services
+@using GorevTakipUygulamasi.Services.TaskServices
+@using Microsoft.AspNetCore.Identity
+@inject ITaskService TaskService
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Görevlerim</PageTitle>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="fas fa-tasks"></i> Görevlerim</h2>
+                <button class="btn btn-primary" @onclick="GoToAddTask">
+                    <i class="fas fa-plus"></i> Yeni Görev
+                </button>
+            </div>
+
+            @if (tasks == null)
+            {
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Yükleniyor...</span>
+                    </div>
+                </div>
+            }
+            else if (!tasks.Any())
+            {
+                <div class="alert alert-info text-center">
+                    <i class="fas fa-info-circle fa-2x mb-2"></i>
+                    <h4>Henüz görev bulunmuyor</h4>
+                    <p>İlk görevinizi eklemek için "Yeni Görev" butonuna tıklayın.</p>
+                </div>
+            }
+            else
+            {
+                <!-- İstatistik Kartları -->
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <div class="card bg-warning text-white">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h4>@pendingCount</h4>
+                                        <span>Bekleyen</span>
+                                    </div>
+                                    <i class="fas fa-clock fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-info text-white">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h4>@inProgressCount</h4>
+                                        <span>Devam Eden</span>
+                                    </div>
+                                    <i class="fas fa-play fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-success text-white">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h4>@completedCount</h4>
+                                        <span>Tamamlanan</span>
+                                    </div>
+                                    <i class="fas fa-check fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Görev Listesi -->
+                <div class="row">
+                    @foreach (var task in tasks)
+                    {
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="card h-100 @GetCardClass(task.Status)">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <span class="badge @GetStatusBadgeClass(task.Status)">
+                                        @GetStatusText(task.Status)
+                                    </span>
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle"
+                                                type="button" data-bs-toggle="dropdown">
+                                            <i class="fas fa-ellipsis-v"></i>
+                                        </button>
+                                        <ul class="dropdown-menu">
+                                            <li>
+                                                <a class="dropdown-item" href="#" @onclick="() => EditTask(task.Id)">
+                                                    <i class="fas fa-edit"></i> Düzenle
+                                                </a>
+                                            </li>
+                                            @if (task.Status != Models.TaskStatus.Tamamlandi)
+                                            {
+                                                <li>
+                                                    <a class="dropdown-item" href="#" @onclick="() => CompleteTask(task.Id)">
+                                                        <i class="fas fa-check"></i> Tamamla
+                                                    </a>
+                                                </li>
+                                            }
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li>
+                                                <a class="dropdown-item text-danger" href="#" @onclick="() => DeleteTask(task.Id)">
+                                                    <i class="fas fa-trash"></i> Sil
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <h5 class="card-title">@task.Title</h5>
+                                    @if (!string.IsNullOrEmpty(task.Description))
+                                    {
+                                        <p class="card-text">@task.Description</p>
+                                    }
+                                    <div class="small text-muted">
+                                        <div><i class="fas fa-calendar-plus"></i> @task.CreatedDate.ToString("dd.MM.yyyy")</div>
+                                        @if (task.DueDate.HasValue)
+                                        {
+                                            <div class="@(task.DueDate < DateTime.Now && task.Status != Models.TaskStatus.Tamamlandi ? "text-danger" : "")">
+                                                <i class="fas fa-calendar-alt"></i> Son: @task.DueDate.Value.ToString("dd.MM.yyyy")
+                                            </div>
+                                        }
+                                        @if (task.CompletedDate.HasValue)
+                                        {
+                                            <div class="text-success">
+                                                <i class="fas fa-check-circle"></i> @task.CompletedDate.Value.ToString("dd.MM.yyyy")
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<TaskItem> tasks = new();
+    private string userId = string.Empty;
+    private int pendingCount = 0;
+    private int inProgressCount = 0;
+    private int completedCount = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        userId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
+
+        if (!string.IsNullOrEmpty(userId))
+        {
+            await LoadTasks();
+        }
+    }
+
+    private async Task LoadTasks()
+    {
+        tasks = await TaskService.GetUserTasksAsync(userId);
+        UpdateStatistics();
+    }
+
+    private void UpdateStatistics()
+    {
+        pendingCount = tasks.Count(t => t.Status == Models.TaskStatus.Beklemede);
+        inProgressCount = tasks.Count(t => t.Status == Models.TaskStatus.DevamEdiyor);
+        completedCount = tasks.Count(t => t.Status == Models.TaskStatus.Tamamlandi);
+    }
+
+    private void GoToAddTask()
+    {
+        Navigation.NavigateTo("/gorev-ekle");
+    }
+
+    private void EditTask(int taskId)
+    {
+        Navigation.NavigateTo($"/gorev-duzenle/{taskId}");
+    }
+
+    private async Task CompleteTask(int taskId)
+    {
+        var success = await TaskService.ChangeTaskStatusAsync(taskId, userId, Models.TaskStatus.Tamamlandi);
+        if (success)
+        {
+            await LoadTasks();
+            await JSRuntime.InvokeVoidAsync("alert", "Görev tamamlandı!");
+        }
+    }
+
+    private async Task DeleteTask(int taskId)
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Bu görevi silmek istediğinizden emin misiniz?");
+        if (confirmed)
+        {
+            var success = await TaskService.DeleteTaskAsync(taskId, userId);
+            if (success)
+            {
+                await LoadTasks();
+                await JSRuntime.InvokeVoidAsync("alert", "Görev silindi!");
+            }
+        }
+    }
+
+    private string GetCardClass(Models.TaskStatus status)
+    {
+        return status switch
+        {
+            Models.TaskStatus.Tamamlandi => "border-success",
+            Models.TaskStatus.DevamEdiyor => "border-info",
+            _ => "border-warning"
+        };
+    }
+
+    private string GetStatusBadgeClass(Models.TaskStatus status)
+    {
+        return status switch
+        {
+            Models.TaskStatus.Tamamlandi => "bg-success",
+            Models.TaskStatus.DevamEdiyor => "bg-info",
+            _ => "bg-warning"
+        };
+    }
+
+    private string GetStatusText(Models.TaskStatus status)
+    {
+        return status switch
+        {
+            Models.TaskStatus.Beklemede => "Beklemede",
+            Models.TaskStatus.DevamEdiyor => "Devam Ediyor",
+            Models.TaskStatus.Tamamlandi => "Tamamlandı",
+            _ => "Beklemede"
+        };
+    }
+}

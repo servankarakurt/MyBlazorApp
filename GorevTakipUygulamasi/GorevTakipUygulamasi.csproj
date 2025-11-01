@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>aspnet-GorevTakipUygulamasi-b053c293-de62-48de-8651-04d44d1dc4be</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="Pages\Reminders\ReminderPage.razor.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Pages\Reminders\ReminderPage.razor.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AspNet.Security.OAuth.GitHub" Version="6.0.15" />
+    <PackageReference Include="Azure.Core" Version="1.47.1" />
+    <PackageReference Include="Azure.Data.Tables" Version="12.11.0" />
+    <PackageReference Include="Hangfire.Core" Version="1.8.20" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="6.0.35" />
+    <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="6.0.36" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="6.0.36" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.UI" Version="6.0.36" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="6.0.36" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="6.0.36" />
+    <PackageReference Include="Microsoft.Graph" Version="5.89.0" />
+  </ItemGroup>
+
+</Project>

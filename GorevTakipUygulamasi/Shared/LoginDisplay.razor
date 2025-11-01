@@ -1,0 +1,64 @@
+﻿@* Eğer bu bileşeni kullanmak isterseniz, MainLayout.razor'daki <AuthorizeView> bloğunun yerine koyabilirsiniz. *@
+
+<nav class="auth-menu">
+    <AuthorizeView>
+        <Authorized>
+            <a class="auth-item" href="Identity/Account/Manage">
+                <i class="fa fa-user-circle"></i> @context.User.Identity?.Name!
+            </a>
+            <form method="post" action="Identity/Account/LogOut" class="auth-item-form">
+                <button type="submit" class="auth-item-btn">
+                    <i class="fa fa-sign-out-alt"></i> Çıkış
+                </button>
+            </form>
+        </Authorized>
+        <NotAuthorized>
+            <a class="auth-item" href="Identity/Account/Register">
+                <i class="fa fa-user-plus"></i> Kayıt Ol
+            </a>
+            <a class="auth-item" href="Identity/Account/Login">
+                <i class="fa fa-door-open"></i> Giriş Yap
+            </a>
+            <a class="auth-item" href="/about">
+                <i class="fa fa-info-circle"></i> Hakkında
+            </a>
+        </NotAuthorized>
+    </AuthorizeView>
+</nav>
+
+<style>
+    .auth-menu {
+        background-color: darkblue;
+        padding: 0.75rem 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 1rem;
+        border-radius: 0.25rem;
+    }
+
+    .auth-item,
+    .auth-item-btn {
+        color: #ffffff !important;
+        font-weight: 500;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        border-radius: 0.25rem;
+        transition: background-color 0.2s ease;
+    }
+
+        .auth-item:hover,
+        .auth-item-btn:hover {
+            background-color: rgba(255, 255, 255, 0.15);
+            text-decoration: none;
+        }
+
+    .auth-item-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+    }
+</style>

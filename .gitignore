@@ -1,0 +1,12 @@
+# C# and .NET Core build outputs
+[Bb]in/
+[Oo]bj/
+
+# Visual Studio temporary files and user settings
+.vs/
+*.suo
+*.user
+
+# App settings that should not be in source control
+appsettings.json
+appsettings.Development.json

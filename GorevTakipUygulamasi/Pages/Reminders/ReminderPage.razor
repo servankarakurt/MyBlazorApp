@@ -1,0 +1,807 @@
+﻿@page "/hatirlatici"
+@page "/reminder"
+@using GorevTakipUygulamasi.Models
+@using GorevTakipUygulamasi.Services.ReminderServices
+@using System.Security.Claims
+@using Microsoft.JSInterop
+@inject IReminderService ReminderService
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Hatırlatıcılar</PageTitle>
+
+<style>
+    .reminder-container {
+        max-width: 400px;
+        margin: 0 auto;
+        padding: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    .calendar-card {
+        background: white;
+        border-radius: 20px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    }
+
+    .calendar-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .calendar-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #333;
+    }
+
+    .calendar-nav {
+        display: flex;
+        gap: 10px;
+    }
+
+    .nav-btn {
+        width: 30px;
+        height: 30px;
+        border: none;
+        background: #f5f5f5;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 16px;
+        transition: all 0.2s;
+    }
+
+        .nav-btn:hover {
+            background: #e0e0e0;
+        }
+
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 8px;
+        margin-bottom: 20px;
+    }
+
+    .calendar-day-header {
+        text-align: center;
+        font-size: 12px;
+        font-weight: 500;
+        color: #666;
+        padding: 8px 4px;
+    }
+
+    .calendar-day {
+        aspect-ratio: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: all 0.2s;
+        position: relative;
+    }
+
+        .calendar-day:hover {
+            background: #f0f0f0;
+        }
+
+        .calendar-day.today {
+            background: #4CAF50;
+            color: white;
+            font-weight: 600;
+        }
+
+        .calendar-day.selected {
+            background: #2196F3;
+            color: white;
+        }
+
+        .calendar-day.has-reminder {
+            background: #FF6B6B;
+            color: white;
+        }
+
+        .calendar-day.other-month {
+            color: #ccc;
+            background: transparent;
+        }
+
+            .calendar-day.other-month:hover {
+                background: #f9f9f9;
+                color: #999;
+            }
+
+            .calendar-day.other-month.has-reminder {
+                background: #ffcccc;
+                color: #ff6b6b;
+            }
+
+    .reminders-section {
+        background: white;
+        border-radius: 20px;
+        padding: 20px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    }
+
+    .section-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 15px;
+    }
+
+    .reminder-item {
+        display: flex;
+        align-items: center;
+        padding: 12px;
+        margin-bottom: 8px;
+        background: #f8f9fa;
+        border-radius: 12px;
+        border-left: 4px solid #4CAF50;
+        transition: all 0.2s;
+    }
+
+        .reminder-item.completed {
+            opacity: 0.6;
+            border-left-color: #999;
+        }
+
+        .reminder-item.pending {
+            border-left-color: #2196F3;
+        }
+
+        .reminder-item.overdue {
+            border-left-color: #FF6B6B;
+        }
+
+    .reminder-color {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 12px;
+    }
+
+        .reminder-color.green {
+            background: #4CAF50;
+        }
+
+        .reminder-color.blue {
+            background: #2196F3;
+        }
+
+        .reminder-color.red {
+            background: #FF6B6B;
+        }
+
+        .reminder-color.orange {
+            background: #FF9800;
+        }
+
+        .reminder-color.purple {
+            background: #9C27B0;
+        }
+
+    .reminder-content {
+        flex: 1;
+    }
+
+    .reminder-title {
+        font-size: 14px;
+        font-weight: 500;
+        color: #333;
+        margin-bottom: 4px;
+    }
+
+    .reminder-time {
+        font-size: 12px;
+        color: #666;
+    }
+
+    .reminder-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .action-btn {
+        width: 32px;
+        height: 32px;
+        border: none;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 14px;
+        transition: all 0.2s;
+    }
+
+    .edit-btn {
+        background: #E3F2FD;
+        color: #2196F3;
+    }
+
+    .delete-btn {
+        background: #FFEBEE;
+        color: #F44336;
+    }
+
+    .add-btn {
+        width: 100%;
+        padding: 15px;
+        background: #00BCD4;
+        color: white;
+        border: none;
+        border-radius: 15px;
+        font-size: 16px;
+        font-weight: 600;
+        margin-top: 20px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+        .add-btn:hover {
+            background: #00ACC1;
+            transform: translateY(-2px);
+        }
+
+    .modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+
+    .modal-content {
+        background: white;
+        border-radius: 20px;
+        padding: 20px;
+        width: 90%;
+        max-width: 400px;
+        max-height: 80vh;
+        overflow-y: auto;
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .modal-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #333;
+    }
+
+    .close-btn {
+        width: 30px;
+        height: 30px;
+        border: none;
+        background: #f5f5f5;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 18px;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-label {
+        display: block;
+        font-size: 14px;
+        font-weight: 500;
+        color: #333;
+        margin-bottom: 8px;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        font-size: 14px;
+        transition: all 0.2s;
+        box-sizing: border-box;
+    }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #2196F3;
+            box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+        }
+
+    .color-picker {
+        display: flex;
+        gap: 10px;
+        margin-top: 8px;
+    }
+
+    .color-option {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        border: 2px solid transparent;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+        .color-option.selected {
+            border-color: #333;
+            transform: scale(1.1);
+        }
+
+    .checkbox-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 10px;
+    }
+
+    .checkbox {
+        width: 18px;
+        height: 18px;
+    }
+
+    .modal-footer {
+        display: flex;
+        gap: 10px;
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 1px solid #eee;
+    }
+
+    .btn {
+        flex: 1;
+        padding: 12px;
+        border: none;
+        border-radius: 10px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .btn-secondary {
+        background: #f5f5f5;
+        color: #666;
+    }
+
+    .btn-primary {
+        background: #2196F3;
+        color: white;
+    }
+
+    .loading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 40px;
+        color: white;
+        font-size: 16px;
+    }
+</style>
+
+<div class="reminder-container">
+    @if (isLoading)
+    {
+        <div class="loading">
+            <em>Yükleniyor...</em>
+        </div>
+    }
+    else
+    {
+        <!-- Takvim Kartı -->
+        <div class="calendar-card">
+            <div class="calendar-header">
+                <h4 class="calendar-title">@currentMonth.ToString("MMMM yyyy", new System.Globalization.CultureInfo("tr-TR"))</h4>
+                <div class="calendar-nav">
+                    <button class="nav-btn" @onclick="PreviousMonth">‹</button>
+                    <button class="nav-btn" @onclick="NextMonth">›</button>
+                </div>
+            </div>
+
+            <div class="calendar-grid">
+                <div class="calendar-day-header">Paz</div>
+                <div class="calendar-day-header">Pzt</div>
+                <div class="calendar-day-header">Sal</div>
+                <div class="calendar-day-header">Çar</div>
+                <div class="calendar-day-header">Per</div>
+                <div class="calendar-day-header">Cum</div>
+                <div class="calendar-day-header">Cmt</div>
+
+                @foreach (var day in GetCalendarDays())
+                {
+                    <div class="calendar-day @GetDayClasses(day)" @onclick="() => SelectDay(day)">
+                        @day.Day
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Hatırlatıcılar Bölümü -->
+        <div class="reminders-section">
+            <h4 class="section-title">
+                @if (selectedDate.HasValue)
+                {
+                    @($"{selectedDate.Value:dd MMMM yyyy} - Hatırlatıcılar")
+                }
+                else
+                {
+                    @("Seçilen Hatırlatıcılar")
+                }
+            </h4>
+
+            @{
+                var displayReminders = selectedDate.HasValue
+                ? reminders.Where(r => r.Date.ToDateTime(TimeOnly.MinValue).Date == selectedDate.Value.Date).ToList()
+                : reminders.Take(5).ToList();
+            }
+
+            @if (displayReminders.Any())
+            {
+                @foreach (var reminder in displayReminders)
+                {
+                    <div class="reminder-item @(reminder.IsCompleted ? "completed" : GetReminderStatus(reminder))">
+                        <div class="reminder-color @GetReminderColorClass(reminder)"></div>
+                        <div class="reminder-content">
+                            <div class="reminder-title">@reminder.Title</div>
+                            <div class="reminder-time">@reminder.Date.ToShortDateString() @reminder.Time.ToString("HH:mm")</div>
+                        </div>
+                        <div class="reminder-actions">
+                            <button class="action-btn edit-btn" @onclick="() => OpenEditModal(reminder)">✏️</button>
+                            <button class="action-btn delete-btn" @onclick="() => DeleteReminder(reminder)">🗑️</button>
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <div style="text-align: center; color: #999; padding: 20px;">
+                    @if (selectedDate.HasValue)
+                    {
+                        @("Bu tarihte hatırlatıcı yok")
+                    }
+                    else
+                    {
+                        @("Henüz hatırlatıcı eklenmemiş")
+                    }
+                </div>
+            }
+
+            <button class="add-btn" @onclick="OpenAddModal">
+                HATIRLATICI EKLE
+            </button>
+        </div>
+    }
+</div>
+
+@if (showModal)
+{
+    <div class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">@(editingReminder.Id != Guid.Empty ? "Hatırlatıcıyı Düzenle" : "Yeni Hatırlatıcı")</h5>
+                <button class="close-btn" @onclick="CloseModal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Başlık</label>
+                    <input class="form-control" @bind="editingReminder.Title" placeholder="Hatırlatıcı başlığı" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Not</label>
+                    <textarea class="form-control" @bind="editingReminder.Description" placeholder="Yeni not ekle" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <div class="form-group">
+                        <label class="form-label">Renk seç</label>
+                        <div class="color-picker">
+                            <div class="color-option" style="background: #00BCD4;" @onclick="@(() => selectedColor = "blue")"></div>
+                            <div class="color-option" style="background: #4CAF50;" @onclick="@(() => selectedColor = "green")"></div>
+                            <div class="color-option" style="background: #FF6B6B;" @onclick="@(() => selectedColor = "red")"></div>
+                            <div class="color-option" style="background: #FF9800;" @onclick="@(() => selectedColor = "orange")"></div>
+                            <div class="color-option" style="background: #9C27B0;" @onclick="@(() => selectedColor = "purple")"></div>
+                            <div class="color-option" style="background: #999;" @onclick="@(() => selectedColor = "gray")"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Tarih</label>
+                    <input type="date" class="form-control" @bind="dateInput" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Saat</label>
+                    <input type="time" class="form-control" @bind="timeInput" />
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" class="checkbox" @bind="editingReminder.EmailReminder" />
+                    <label>E-posta hatırlatması gönder</label>
+                </div>
+                @if (editingReminder.Id != Guid.Empty)
+                {
+                    <div class="checkbox-group">
+                        <input type="checkbox" class="checkbox" @bind="editingReminder.IsCompleted" />
+                        <label>Tamamlandı mı?</label>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseModal">Kapat</button>
+                <button class="btn btn-primary" @onclick="SaveReminder">Kaydet</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ReminderItem> reminders = new();
+    private ReminderItem editingReminder = new();
+    private bool isLoading = true;
+    private bool showModal = false;
+    private string? userId;
+    private DateTime dateInput;
+    private DateTime timeInput;
+    private string selectedColor = "blue";
+
+    // Yeni takvim değişkenleri
+    private DateTime currentMonth = DateTime.Today;
+    private DateTime? selectedDate = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity is null || !user.Identity.IsAuthenticated)
+        {
+            Navigation.NavigateTo("/Identity/Account/Login?returnUrl=/hatirlatici");
+            return;
+        }
+
+        userId = user.FindFirst(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
+
+        if (string.IsNullOrEmpty(userId))
+        {
+            return;
+        }
+
+        // Başlangıçta bugünün ayını göster
+        currentMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+
+        await LoadReminders();
+    }
+
+    private async Task LoadReminders()
+    {
+        isLoading = true;
+        var serviceResponse = await ReminderService.GetUserRemindersAsync(userId!);
+        if (serviceResponse.IsSuccess)
+        {
+            reminders = serviceResponse.Data ?? new List<ReminderItem>();
+        }
+        else
+        {
+            await JSRuntime.InvokeVoidAsync("alert", serviceResponse.Message);
+        }
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    // Takvim metodları
+    private void PreviousMonth()
+    {
+        currentMonth = currentMonth.AddMonths(-1);
+        selectedDate = null; // Seçimi temizle
+    }
+
+    private void NextMonth()
+    {
+        currentMonth = currentMonth.AddMonths(1);
+        selectedDate = null; // Seçimi temizle
+    }
+
+    private void SelectDay(DateTime day)
+    {
+        selectedDate = day;
+    }
+
+    private List<DateTime> GetCalendarDays()
+    {
+        var days = new List<DateTime>();
+        var firstDay = new DateTime(currentMonth.Year, currentMonth.Month, 1);
+        var lastDay = firstDay.AddMonths(1).AddDays(-1);
+
+        // Haftanın ilk gününe göre ayarla (Pazar = 0)
+        var startDate = firstDay.AddDays(-(int)firstDay.DayOfWeek);
+
+        // 6 hafta (42 gün) göster
+        for (int i = 0; i < 42; i++)
+        {
+            days.Add(startDate.AddDays(i));
+        }
+
+        return days;
+    }
+
+    private string GetDayClasses(DateTime day)
+    {
+        var classes = new List<string>();
+
+        var today = DateTime.Today;
+        var isCurrentMonth = day.Month == currentMonth.Month;
+        var isToday = day.Date == today.Date;
+        var isSelected = selectedDate.HasValue && day.Date == selectedDate.Value.Date;
+        var hasReminder = HasReminderOnDay(day);
+
+        if (isToday)
+            classes.Add("today");
+
+        if (isSelected)
+            classes.Add("selected");
+
+        if (hasReminder)
+            classes.Add("has-reminder");
+
+        if (!isCurrentMonth)
+            classes.Add("other-month");
+
+        return string.Join(" ", classes);
+    }
+
+    private void OpenAddModal()
+    {
+        editingReminder = new ReminderItem
+        {
+            Id = Guid.Empty,
+            Date = DateOnly.FromDateTime(selectedDate ?? DateTime.Today),
+            Time = TimeOnly.FromDateTime(DateTime.Now)
+        };
+        dateInput = selectedDate ?? DateTime.Today;
+        timeInput = DateTime.Now;
+        selectedColor = "blue";
+        showModal = true;
+    }
+
+    private void OpenEditModal(ReminderItem reminderToEdit)
+    {
+        editingReminder = new ReminderItem
+        {
+            Id = reminderToEdit.Id,
+            Title = reminderToEdit.Title,
+            Description = reminderToEdit.Description,
+            Date = reminderToEdit.Date,
+            Time = reminderToEdit.Time,
+            IsCompleted = reminderToEdit.IsCompleted,
+            EmailReminder = reminderToEdit.EmailReminder
+        };
+        dateInput = reminderToEdit.Date.ToDateTime(TimeOnly.MinValue);
+        timeInput = new DateTime(2000, 1, 1, reminderToEdit.Time.Hour, reminderToEdit.Time.Minute, 0);
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+    }
+
+    private async Task SaveReminder()
+    {
+        if (string.IsNullOrWhiteSpace(editingReminder.Title))
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Başlık boş olamaz!");
+            return;
+        }
+
+        var date = DateOnly.FromDateTime(dateInput);
+        var time = TimeOnly.FromDateTime(timeInput);
+
+        if (editingReminder.Id != Guid.Empty)
+        {
+            var updateDto = new UpdateReminderDto
+            {
+                Title = editingReminder.Title,
+                Description = editingReminder.Description,
+                Date = date,
+                Time = time,
+                EmailReminder = editingReminder.EmailReminder,
+                IsCompleted = editingReminder.IsCompleted
+            };
+
+            var result = await ReminderService.UpdateReminderAsync(editingReminder.Id, updateDto, userId!);
+            if (!result.IsSuccess)
+            {
+                await JSRuntime.InvokeVoidAsync("alert", result.Message);
+                return;
+            }
+        }
+        else
+        {
+            var createDto = new CreateReminderDto
+            {
+                Title = editingReminder.Title,
+                Description = editingReminder.Description,
+                Date = date,
+                Time = time,
+                EmailReminder = editingReminder.EmailReminder
+            };
+
+            var result = await ReminderService.CreateReminderAsync(createDto, userId!);
+            if (!result.IsSuccess)
+            {
+                await JSRuntime.InvokeVoidAsync("alert", result.Message);
+                return;
+            }
+        }
+
+        CloseModal();
+        await LoadReminders();
+    }
+
+    private async Task DeleteReminder(ReminderItem reminderToDelete)
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"'{reminderToDelete.Title}' başlıklı hatırlatıcıyı silmek istediğinize emin misiniz?");
+        if (confirmed)
+        {
+            var result = await ReminderService.DeleteReminderAsync(reminderToDelete.Id, userId!);
+            if (result.IsSuccess)
+            {
+                await LoadReminders();
+            }
+            else
+            {
+                await JSRuntime.InvokeVoidAsync("alert", result.Message);
+            }
+        }
+    }
+
+    private bool HasReminderOnDay(DateTime day)
+    {
+        return reminders.Any(r => r.Date.ToDateTime(TimeOnly.MinValue).Date == day.Date);
+    }
+
+    private string GetReminderStatus(ReminderItem reminder)
+    {
+        var reminderDateTime = reminder.Date.ToDateTime(reminder.Time);
+        if (reminderDateTime < DateTime.Now)
+            return "overdue";
+        return "pending";
+    }
+
+    private string GetReminderColorClass(ReminderItem reminder)
+    {
+        var hash = Math.Abs(reminder.Title.GetHashCode() % 5);
+        return hash switch
+        {
+            0 => "green",
+            1 => "blue",
+            2 => "red",
+            3 => "orange",
+            4 => "purple",
+            _ => "blue"
+        };
+    }
+}

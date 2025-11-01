@@ -1,0 +1,303 @@
+﻿<h3>EditTask</h3>
+
+@code {
+
+}
+@page "/gorev-duzenle/{TaskId:int}"
+@page "/edit-task/{TaskId:int}"
+@using System.ComponentModel.DataAnnotations
+@using System.Security.Claims
+@using GorevTakipUygulamasi.Models
+@using GorevTakipUygulamasi.Services
+@using GorevTakipUygulamasi.Services.TaskServices
+@using Microsoft.AspNetCore.Identity
+@using TaskStatus = GorevTakipUygulamasi.Models.TaskStatus
+@inject ITaskService TaskService
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Görev Düzenle</PageTitle>
+
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            @if (isLoading)
+            {
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Yükleniyor...</span>
+                    </div>
+                    <p class="mt-2">Görev bilgileri yükleniyor...</p>
+                </div>
+            }
+            else if (taskToEdit == null)
+            {
+                <div class="alert alert-danger">
+                    <h4><i class="fas fa-exclamation-triangle"></i> Hata!</h4>
+                    <p>Görev bulunamadı veya bu görevi düzenleme yetkiniz yok.</p>
+                    <button class="btn btn-primary" @onclick="GoToTaskList">
+                        <i class="fas fa-arrow-left"></i> Görev Listesine Dön
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="card shadow">
+                    <div class="card-header bg-info text-white">
+                        <h4 class="card-title mb-0">
+                            <i class="fas fa-edit"></i> Görev Düzenle
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <EditForm Model="@taskToEdit" OnValidSubmit="@HandleValidSubmit">
+                            <DataAnnotationsValidator />
+
+                            <div class="mb-3">
+                                <label for="title" class="form-label">
+                                    <i class="fas fa-heading"></i> Görev Başlığı *
+                                </label>
+                                <InputText id="title" class="form-control" @bind-Value="taskToEdit.Title"
+                                           placeholder="Görev başlığını girin..." />
+                                <ValidationMessage For="@(() => taskToEdit.Title)" class="text-danger" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="description" class="form-label">
+                                    <i class="fas fa-align-left"></i> Açıklama
+                                </label>
+                                <InputTextArea id="description" class="form-control" @bind-Value="taskToEdit.Description"
+                                               rows="4" placeholder="Görev hakkında detaylar..." />
+                                <ValidationMessage For="@(() => taskToEdit.Description)" class="text-danger" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="status" class="form-label">
+                                    <i class="fas fa-flag"></i> Durum
+                                </label>
+                                <InputSelect id="status" class="form-select" @bind-Value="taskToEdit.Status">
+                                    <option value="@Models.TaskStatus.Beklemede">Beklemede</option>
+                                    <option value="@Models.TaskStatus.DevamEdiyor">Devam Ediyor</option>
+                                    <option value="@Models.TaskStatus.Tamamlandi">Tamamlandı</option>
+                                </InputSelect>
+                                <ValidationMessage For="@(() => taskToEdit.Status)" class="text-danger" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="dueDate" class="form-label">
+                                    <i class="fas fa-calendar-alt"></i> Son Teslim Tarihi
+                                </label>
+                                <InputDate id="dueDate" class="form-control" @bind-Value="taskToEdit.DueDate" />
+                                <div class="form-text">İsteğe bağlı - boş bırakabilirsiniz</div>
+                                <ValidationMessage For="@(() => taskToEdit.DueDate)" class="text-danger" />
+                            </div>
+
+                            <!-- Görev Bilgileri -->
+                            <div class="mb-3">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <small class="text-muted">
+                                            <i class="fas fa-calendar-plus"></i>
+                                            Oluşturulma: @taskToEdit.CreatedDate.ToString("dd.MM.yyyy HH:mm")
+                                        </small>
+                                    </div>
+                                    @if (taskToEdit.CompletedDate.HasValue)
+                                    {
+                                        <div class="col-md-6">
+                                            <small class="text-success">
+                                                <i class="fas fa-check-circle"></i>
+                                                Tamamlanma: @taskToEdit.CompletedDate.Value.ToString("dd.MM.yyyy HH:mm")
+                                            </small>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                <button type="button" class="btn btn-secondary me-md-2" @onclick="Cancel">
+                                    <i class="fas fa-times"></i> İptal
+                                </button>
+                                <button type="button" class="btn btn-danger me-md-2" @onclick="DeleteTask">
+                                    <i class="fas fa-trash"></i> Sil
+                                </button>
+                                <button type="submit" class="btn btn-success" disabled="@isSubmitting">
+                                    @if (isSubmitting)
+                                    {
+                                        <span class="spinner-border spinner-border-sm" role="status"></span>
+                                        <span>Güncelleniyor...</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="fas fa-save"></i>
+                                        <span>Güncelle</span>
+                                    }
+                                </button>
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+
+                <!-- Durum Değişikliği Hızlı Butonları -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="fas fa-lightning-bolt"></i> Hızlı İşlemler</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2 d-md-flex">
+                            @if (taskToEdit.Status != Models.TaskStatus.Beklemede)
+                            {
+                                <button class="btn btn-outline-warning" @onclick="() => ChangeStatus(TaskStatus.Beklemede)">
+                                    <i class="fas fa-clock"></i> Beklemede Yap
+                                </button>
+                            }
+                            @if (taskToEdit.Status != Models.TaskStatus.DevamEdiyor)
+                            {
+                                <button class="btn btn-outline-info" @onclick="() => ChangeStatus(TaskStatus.DevamEdiyor)">
+                                    <i class="fas fa-play"></i> Başlat
+                                </button>
+                            }
+                            @if (taskToEdit.Status != Models.TaskStatus.Tamamlandi)
+                            {
+                                <button class="btn btn-outline-success" @onclick="() => ChangeStatus(TaskStatus.Tamamlandi)">
+                                    <i class="fas fa-check"></i> Tamamla
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int TaskId { get; set; }
+
+    private TaskItem? taskToEdit;
+    private string userId = string.Empty;
+    private bool isSubmitting = false;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        userId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
+
+        if (string.IsNullOrEmpty(userId))
+        {
+            Navigation.NavigateTo("/Identity/Account/Login");
+            return;
+        }
+
+        await LoadTask();
+    }
+
+    private async Task LoadTask()
+    {
+        try
+        {
+            isLoading = true;
+            taskToEdit = await TaskService.GetTaskByIdAsync(TaskId, userId);
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Görev yüklenirken hata oluştu: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        if (isSubmitting || taskToEdit == null) return;
+
+        try
+        {
+            isSubmitting = true;
+
+            var updatedTask = await TaskService.UpdateTaskAsync(taskToEdit);
+
+            if (updatedTask != null)
+            {
+                await JSRuntime.InvokeVoidAsync("alert", "Görev başarıyla güncellendi!");
+                Navigation.NavigateTo("/gorevler");
+            }
+            else
+            {
+                await JSRuntime.InvokeVoidAsync("alert", "Görev güncellenirken hata oluştu!");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Hata oluştu: {ex.Message}");
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private async Task ChangeStatus(Models.TaskStatus newStatus)
+    {
+        if (taskToEdit == null) return;
+
+        try
+        {
+            var success = await TaskService.ChangeTaskStatusAsync(TaskId, userId, newStatus);
+            if (success)
+            {
+                taskToEdit.Status = newStatus;
+                if (newStatus == Models.TaskStatus.Tamamlandi)
+                {
+                    taskToEdit.CompletedDate = DateTime.Now;
+                }
+
+                await JSRuntime.InvokeVoidAsync("alert", "Görev durumu güncellendi!");
+                StateHasChanged(); // UI'yi yenile
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Hata oluştu: {ex.Message}");
+        }
+    }
+
+    private async Task DeleteTask()
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm",
+            "Bu görevi silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.");
+
+        if (confirmed)
+        {
+            try
+            {
+                var success = await TaskService.DeleteTaskAsync(TaskId, userId);
+                if (success)
+                {
+                    await JSRuntime.InvokeVoidAsync("alert", "Görev silindi!");
+                    Navigation.NavigateTo("/gorevler");
+                }
+                else
+                {
+                    await JSRuntime.InvokeVoidAsync("alert", "Görev silinirken hata oluştu!");
+                }
+            }
+            catch (Exception ex)
+            {
+                await JSRuntime.InvokeVoidAsync("alert", $"Hata oluştu: {ex.Message}");
+            }
+        }
+    }
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo("/gorevler");
+    }
+
+    private void GoToTaskList()
+    {
+        Navigation.NavigateTo("/gorevler");
+    }
+}
