@@ -1,231 +1,93 @@
-﻿using GorevTakipUygulamasi.Data;
-using GorevTakipUygulamasi.Models;
-using Microsoft.EntityFrameworkCore;
+﻿using GorevTakipUygulamasi.Models;
 using Microsoft.Extensions.Logging;
+// YENİ using'ler (SQL'e ait olanlar kaldırıldı)
+using Azure.Data.Tables;
+using Azure; // ETag için
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using System;
 
 namespace GorevTakipUygulamasi.Services.ReminderServices
 {
     public class ReminderService : IReminderService
     {
-        private readonly ApplicationDbContext _context;
         private readonly ILogger<ReminderService> _logger;
+        private readonly TableClient _reminderTableClient;
+        private const string TABLE_NAME = "Reminders"; // Logic App'in okuduğu tablo (Görsel 2)
 
-        public ReminderService(ApplicationDbContext context, ILogger<ReminderService> logger)
+        public ReminderService(
+            TableServiceClient tableServiceClient, // Program.cs'ten gelir
+            ILogger<ReminderService> logger)
         {
-            _context = context;
             _logger = logger;
+            // "Reminders" adında bir tablo oluştur (varsa es geçer)
+            tableServiceClient.CreateTableIfNotExists(TABLE_NAME);
+            _reminderTableClient = tableServiceClient.GetTableClient(TABLE_NAME);
         }
 
-        public async Task<List<ReminderItem>> GetActiveRemindersAsync()
-        {
-            return await _context.Reminders
-                .Where(r => r.IsActive && !r.IsCompleted)
-                .OrderBy(r => r.Date)
-                .ThenBy(r => r.Time)
-                .ToListAsync();
-        }
-
-        public async Task<ReminderItem?> GetReminderByIdAsync(Guid id)
-        {
-            return await _context.Reminders
-                .FirstOrDefaultAsync(r => r.Id == id);
-        }
-
-        // CreateReminderAsync - CreateReminderDto kullanarak
+        // YENİ: Azure Table'a kayıt yapan metod
         public async Task<ServiceResponse<ReminderItem>> CreateReminderAsync(CreateReminderDto createDto, string userId)
         {
             try
             {
-                _logger.LogInformation($"Creating reminder for user: {userId}");
+                _logger.LogInformation($"Creating reminder for user: {userId} in Azure Table");
 
-                var reminder = new ReminderItem
+                var reminderEntity = new ReminderEntity
                 {
-                    Id = Guid.NewGuid(), // Yeni Guid oluştur
+                    PartitionKey = userId,
+                    RowKey = Guid.NewGuid().ToString(),
                     Title = createDto.Title?.Trim() ?? "",
                     Description = createDto.Description?.Trim(),
-                    Date = createDto.Date,
-                    Time = createDto.Time,
+                    Date = createDto.Date.ToString("yyyy-MM-dd"), // String format
+                    Time = createDto.Time.ToString("HH:mm"), // String format
                     EmailReminder = createDto.EmailReminder,
                     UserId = userId,
                     CreatedAt = DateTime.UtcNow,
                     IsActive = true,
                     IsCompleted = false,
                     EmailSent = false,
-                    NotificationFrequencyMinutes = 60,
-                    Status = ReminderStatus.Active
+                    Status = ReminderStatus.Active.ToString()
                 };
 
-                // Validation
-                if (string.IsNullOrWhiteSpace(reminder.Title))
-                {
-                    return ServiceResponse<ReminderItem>.Error("Başlık gereklidir.");
-                }
-
-                if (reminder.Title.Length > 100)
-                {
-                    return ServiceResponse<ReminderItem>.Error("Başlık en fazla 100 karakter olabilir.");
-                }
-
-                if (!string.IsNullOrEmpty(reminder.Description) && reminder.Description.Length > 500)
-                {
-                    return ServiceResponse<ReminderItem>.Error("Açıklama en fazla 500 karakter olabilir.");
-                }
-
                 // Geçmiş tarih kontrolü
-                var reminderDateTime = reminder.Date.ToDateTime(reminder.Time);
-                if (reminderDateTime < DateTime.Now.AddMinutes(-5)) // 5 dakika tolerans
+                var reminderDateTime = createDto.Date.ToDateTime(createDto.Time);
+                if (reminderDateTime < DateTime.Now.AddMinutes(-5))
                 {
                     return ServiceResponse<ReminderItem>.Error("Hatırlatıcı tarihi geçmişte olamaz.");
                 }
 
-                _context.Reminders.Add(reminder);
+                await _reminderTableClient.AddEntityAsync(reminderEntity);
 
-                _logger.LogInformation($"Saving reminder to database: {reminder.Id}");
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation($"Reminder created successfully: {reminder.Id}");
-                return ServiceResponse<ReminderItem>.Success(reminder, "Hatırlatıcı başarıyla oluşturuldu.");
-            }
-            catch (DbUpdateException dbEx)
-            {
-                _logger.LogError(dbEx, "Database error while creating reminder");
-                var innerMessage = dbEx.InnerException?.Message ?? dbEx.Message;
-                return ServiceResponse<ReminderItem>.Error($"Veritabanı hatası: {innerMessage}");
+                _logger.LogInformation($"Reminder created successfully in Table: {reminderEntity.RowKey}");
+                return ServiceResponse<ReminderItem>.Success(reminderEntity.ToReminderItem(), "Hatırlatıcı başarıyla oluşturuldu.");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error while creating reminder");
+                _logger.LogError(ex, "Error while creating reminder in Azure Table");
                 return ServiceResponse<ReminderItem>.Error($"Hatırlatıcı oluşturulurken hata: {ex.Message}");
             }
         }
 
-        // UpdateReminderAsync - UpdateReminderDto kullanarak
-        public async Task<ServiceResponse<ReminderItem>> UpdateReminderAsync(Guid id, UpdateReminderDto updateDto, string userId)
-        {
-            try
-            {
-                _logger.LogInformation($"Updating reminder: {id} for user: {userId}");
-
-                var existingReminder = await _context.Reminders
-                    .FirstOrDefaultAsync(r => r.Id == id && r.UserId == userId);
-
-                if (existingReminder == null)
-                {
-                    return ServiceResponse<ReminderItem>.Error("Hatırlatıcı bulunamadı veya erişim reddedildi.");
-                }
-
-                // Validation
-                if (string.IsNullOrWhiteSpace(updateDto.Title))
-                {
-                    return ServiceResponse<ReminderItem>.Error("Başlık gereklidir.");
-                }
-
-                if (updateDto.Title.Length > 100)
-                {
-                    return ServiceResponse<ReminderItem>.Error("Başlık en fazla 100 karakter olabilir.");
-                }
-
-                if (!string.IsNullOrEmpty(updateDto.Description) && updateDto.Description.Length > 500)
-                {
-                    return ServiceResponse<ReminderItem>.Error("Açıklama en fazla 500 karakter olabilir.");
-                }
-
-                // Güncelleme işlemi
-                existingReminder.Title = updateDto.Title.Trim();
-                existingReminder.Description = updateDto.Description?.Trim();
-                existingReminder.Date = updateDto.Date;
-                existingReminder.Time = updateDto.Time;
-                existingReminder.EmailReminder = updateDto.EmailReminder;
-                existingReminder.IsCompleted = updateDto.IsCompleted;
-                existingReminder.UpdatedAt = DateTime.UtcNow;
-
-                if (updateDto.IsCompleted && existingReminder.CompletedAt == null)
-                {
-                    existingReminder.CompletedAt = DateTime.UtcNow;
-                    existingReminder.Status = ReminderStatus.Completed;
-                }
-                else if (!updateDto.IsCompleted && existingReminder.CompletedAt != null)
-                {
-                    existingReminder.CompletedAt = null;
-                    existingReminder.Status = ReminderStatus.Active;
-                }
-
-                _context.Entry(existingReminder).State = EntityState.Modified;
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation($"Reminder updated successfully: {id}");
-                return ServiceResponse<ReminderItem>.Success(existingReminder, "Hatırlatıcı başarıyla güncellendi.");
-            }
-            catch (DbUpdateException dbEx)
-            {
-                _logger.LogError(dbEx, "Database error while updating reminder");
-                var innerMessage = dbEx.InnerException?.Message ?? dbEx.Message;
-                return ServiceResponse<ReminderItem>.Error($"Veritabanı hatası: {innerMessage}");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error while updating reminder: {id}");
-                return ServiceResponse<ReminderItem>.Error($"Hatırlatıcı güncellenirken hata: {ex.Message}");
-            }
-        }
-
-        // DeleteReminderAsync
-        public async Task<ServiceResponse<bool>> DeleteReminderAsync(Guid id, string userId)
-        {
-            try
-            {
-                _logger.LogInformation($"Deleting reminder: {id} for user: {userId}");
-
-                var reminder = await _context.Reminders
-                    .FirstOrDefaultAsync(r => r.Id == id && r.UserId == userId);
-
-                if (reminder == null)
-                {
-                    return ServiceResponse<bool>.Error("Hatırlatıcı bulunamadı veya erişim reddedildi.");
-                }
-
-                _context.Reminders.Remove(reminder);
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation($"Reminder deleted successfully: {id}");
-                return ServiceResponse<bool>.Success(true, "Hatırlatıcı başarıyla silindi.");
-            }
-            catch (DbUpdateException dbEx)
-            {
-                _logger.LogError(dbEx, "Database error while deleting reminder");
-                var innerMessage = dbEx.InnerException?.Message ?? dbEx.Message;
-                return ServiceResponse<bool>.Error($"Veritabanı hatası: {innerMessage}");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error while deleting reminder: {id}");
-                return ServiceResponse<bool>.Error($"Hatırlatıcı silinirken hata: {ex.Message}");
-            }
-        }
-
-        public async Task<List<ReminderItem>> GetRemindersByUserIdAsync(string userId)
-        {
-            return await _context.Reminders
-                .Where(r => r.UserId == userId)
-                .OrderByDescending(r => r.CreatedAt)
-                .ToListAsync();
-        }
-
-        // GetUserRemindersAsync metodu - ServiceResponse ile
+        // YENİ: Azure Table'dan okuyan metod
         public async Task<ServiceResponse<List<ReminderItem>>> GetUserRemindersAsync(string userId)
         {
             try
             {
-                _logger.LogInformation($"Getting reminders for user: {userId}");
+                _logger.LogInformation($"Getting reminders for user: {userId} from Azure Table");
+                var reminders = new List<ReminderItem>();
 
-                var reminders = await _context.Reminders
-                    .Where(r => r.UserId == userId)
-                    .OrderBy(r => r.Date)
-                    .ThenBy(r => r.Time)
-                    .ToListAsync();
+                var query = _reminderTableClient.QueryAsync<ReminderEntity>(r => r.PartitionKey == userId);
+
+                await foreach (var entity in query)
+                {
+                    reminders.Add(entity.ToReminderItem());
+                }
 
                 _logger.LogInformation($"Found {reminders.Count} reminders for user: {userId}");
-                return ServiceResponse<List<ReminderItem>>.Success(reminders, "Hatırlatıcılar başarıyla getirildi.");
+                return ServiceResponse<List<ReminderItem>>.Success(
+                    reminders.OrderBy(r => r.Date).ThenBy(r => r.Time).ToList(),
+                    "Hatırlatıcılar başarıyla getirildi.");
             }
             catch (Exception ex)
             {
@@ -234,15 +96,79 @@ namespace GorevTakipUygulamasi.Services.ReminderServices
             }
         }
 
-        public async Task<List<ReminderItem>> GetDueRemindersAsync()
+        // YENİ: Azure Table'da güncelleyen metod
+        public async Task<ServiceResponse<ReminderItem>> UpdateReminderAsync(Guid id, UpdateReminderDto updateDto, string userId)
         {
-            return await _context.Reminders
-                .Where(r => r.IsActive && !r.IsCompleted)
-                .Where(r => EF.Functions.DateFromParts(r.Date.Year, r.Date.Month, r.Date.Day)
-                    .Add(TimeSpan.FromTicks(r.Time.Ticks)) <= DateTime.Now)
-                .OrderBy(r => r.Date)
-                .ThenBy(r => r.Time)
-                .ToListAsync();
+            try
+            {
+                var entity = await _reminderTableClient.GetEntityAsync<ReminderEntity>(userId, id.ToString());
+                if (entity == null)
+                    return ServiceResponse<ReminderItem>.Error("Hatırlatıcı bulunamadı.");
+
+                var existingReminder = entity.Value;
+
+                existingReminder.Title = updateDto.Title.Trim();
+                existingReminder.Description = updateDto.Description?.Trim();
+                existingReminder.Date = updateDto.Date.ToString("yyyy-MM-dd");
+                existingReminder.Time = updateDto.Time.ToString("HH:mm");
+                existingReminder.EmailReminder = updateDto.EmailReminder;
+                existingReminder.IsCompleted = updateDto.IsCompleted;
+                existingReminder.UpdatedAt = DateTime.UtcNow;
+                existingReminder.Status = updateDto.IsCompleted ? ReminderStatus.Completed.ToString() : ReminderStatus.Active.ToString();
+
+                await _reminderTableClient.UpsertEntityAsync(existingReminder, TableUpdateMode.Replace);
+
+                _logger.LogInformation($"Reminder updated successfully: {id}");
+                return ServiceResponse<ReminderItem>.Success(existingReminder.ToReminderItem(), "Hatırlatıcı başarıyla güncellendi.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error while updating reminder: {id}");
+                return ServiceResponse<ReminderItem>.Error($"Hatırlatıcı güncellenirken hata: {ex.Message}");
+            }
+        }
+
+        // YENİ: Azure Table'dan silen metod
+        public async Task<ServiceResponse<bool>> DeleteReminderAsync(Guid id, string userId)
+        {
+            try
+            {
+                await _reminderTableClient.DeleteEntityAsync(userId, id.ToString());
+                _logger.LogInformation($"Reminder deleted successfully: {id}");
+                return ServiceResponse<bool>.Success(true, "Hatırlatıcı başarıyla silindi.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error while deleting reminder: {id}");
+                return ServiceResponse<bool>.Error($"Hatırlatıcı silinirken hata: {ex.Message}");
+            }
+        }
+
+        // --- Arayüzle Uyumlu Kalan Diğer Metodlar (Boş/Yönlendirme) ---
+
+        public Task<List<ReminderItem>> GetRemindersByUserIdAsync(string userId)
+        {
+            _logger.LogWarning("Eski metod çağrıldı: GetRemindersByUserIdAsync. GetUserRemindersAsync'e yönlendiriliyor.");
+            var result = GetUserRemindersAsync(userId).Result; // UI kırmamak için
+            return Task.FromResult(result.Data ?? new List<ReminderItem>());
+        }
+
+        public Task<ReminderItem?> GetReminderByIdAsync(Guid id)
+        {
+            _logger.LogWarning("GetReminderByIdAsync (UserId'siz) Table Storage'da desteklenmiyor.");
+            return Task.FromResult<ReminderItem?>(null);
+        }
+
+        public Task<List<ReminderItem>> GetActiveRemindersAsync()
+        {
+            _logger.LogWarning("GetActiveRemindersAsync logic'i Logic App'e taşındı.");
+            return Task.FromResult(new List<ReminderItem>());
+        }
+
+        public Task<List<ReminderItem>> GetDueRemindersAsync()
+        {
+            _logger.LogWarning("GetDueRemindersAsync logic'i Logic App'e taşındı.");
+            return Task.FromResult(new List<ReminderItem>());
         }
     }
 }
