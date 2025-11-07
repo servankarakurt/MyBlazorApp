@@ -13,7 +13,9 @@ using GorevTakipUygulamasi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// ============================================================
+// 1. DATABASE CONFIGURATION
+// ============================================================
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ??
                       throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
@@ -22,6 +24,9 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
+// ============================================================
+// 2. IDENTITY CONFIGURATION
+// ============================================================
 builder.Services.AddDefaultIdentity<IdentityUser>(options => {
     options.SignIn.RequireConfirmedAccount = false;
     options.Password.RequireDigit = false;
@@ -32,7 +37,9 @@ builder.Services.AddDefaultIdentity<IdentityUser>(options => {
 })
 .AddEntityFrameworkStores<ApplicationDbContext>();
 
-// Configuration Settings
+// ============================================================
+// 3. CONFIGURATION SETTINGS
+// ============================================================
 builder.Services.Configure<AzureStorageSettings>(
     builder.Configuration.GetSection("AzureStorage"));
 
@@ -42,7 +49,9 @@ builder.Services.Configure<LogicAppSettings>(
 builder.Services.Configure<ReminderNotificationSettings>(
     builder.Configuration.GetSection("ReminderNotification"));
 
-// Azure Table Storage (YENİ MİMARİ İÇİN KULLANILACAK)
+// ============================================================
+// 4. AZURE TABLE STORAGE
+// ============================================================
 builder.Services.AddSingleton<TableServiceClient>(serviceProvider =>
 {
     var settings = builder.Configuration.GetSection("AzureStorage").Get<AzureStorageSettings>();
@@ -53,66 +62,69 @@ builder.Services.AddSingleton<TableServiceClient>(serviceProvider =>
     return new TableServiceClient(settings.ConnectionString);
 });
 
-// Task Services (GÖREVLER İÇİN KULLANILACAK)
-builder.Services.AddScoped<GorevTakipUygulamasi.Services.TaskServices.ITaskService,
-                          GorevTakipUygulamasi.Services.TaskServices.TaskService>();
+// ============================================================
+// 5. APPLICATION SERVICES
+// ============================================================
 
-// Task completion email için ÖZEL servis (GÖREVLER İÇİN KULLANILACAK)
+// Task Services (GÖREVLER)
+builder.Services.AddScoped<ITaskService, TaskService>();
 builder.Services.AddHttpClient<ITaskLogicAppService, TaskLogicAppService>();
+builder.Services.AddScoped<ITaskCompletionService, TaskCompletionService>();
 
-// Task Completion Service (GÖREVLER İÇİN KULLANILACAK)
-builder.Services.AddScoped<GorevTakipUygulamasi.Services.TaskServices.ITaskCompletionService,
-                          GorevTakipUygulamasi.Services.TaskServices.TaskCompletionService>();
+// User Services
+builder.Services.AddScoped<IUserService, UserService>();
 
-// User Services (KULLANILACAK)
-builder.Services.AddScoped<GorevTakipUygulamasi.Services.User.IUserService,
-                          GorevTakipUygulamasi.Services.User.UserService>();
+// Reminder Services (HATIRLATICILAR - Azure Table Storage)
+builder.Services.AddScoped<IReminderService, ReminderService>();
 
-// Reminder Services (YENİ MİMARİ - AZURE TABLE VERSİYONU KULLANILACAK)
-builder.Services.AddScoped<GorevTakipUygulamasi.Services.ReminderServices.IReminderService,
-                          GorevTakipUygulamasi.Services.ReminderServices.ReminderService>();
+// HttpClient (Genel)
+builder.Services.AddHttpClient();
 
-// HttpClient Services
-builder.Services.AddHttpClient(); // Bu genel olan kalsın
-
-// Blazor Services
+// ============================================================
+// 6. BLAZOR SERVICES
+// ============================================================
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
-builder.Services.AddScoped<AuthenticationStateProvider, RevalidatingIdentityAuthenticationStateProvider<IdentityUser>>();
+builder.Services.AddScoped<AuthenticationStateProvider,
+    RevalidatingIdentityAuthenticationStateProvider<IdentityUser>>();
 
-// ----- UYGULAMANIN ÇALIŞMASINI SAĞLAYAN EKSİK KISIM -----
+// ============================================================
+// 7. BUILD APPLICATION
+// ============================================================
 var app = builder.Build();
 
-// **OTOMATIK MIGRATION KISMI**
+// ============================================================
+// 8. AUTOMATIC DATABASE MIGRATION
+// ============================================================
 using (var scope = app.Services.CreateScope())
 {
     try
     {
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var migrationLogger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
         var pendingMigrations = context.Database.GetPendingMigrations();
         if (pendingMigrations.Any())
         {
-            Console.WriteLine($"🔄 Applying {pendingMigrations.Count()} pending migrations...");
-            context.Database.Migrate(); // Migration'ı (RemovedReminderFromSQL) burada uygulayacak
-            Console.WriteLine("✅ Migrations applied successfully!");
+            migrationLogger.LogInformation("🔄 Applying {Count} pending migrations...", pendingMigrations.Count());
+            context.Database.Migrate();
+            migrationLogger.LogInformation("✅ Migrations applied successfully!");
         }
         else
         {
-            Console.WriteLine("✅ Database is up to date.");
+            migrationLogger.LogInformation("✅ Database is up to date.");
         }
     }
     catch (Exception ex)
     {
-        // Başlangıçta migration hatası olursa logla
-        Console.WriteLine($"💥 Migration error: {ex.Message}");
-        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "An error occurred while migrating the database.");
-        // Hata olsa bile uygulamanın çökmesini engelleme (belki DB geçici kapalıdır)
+        var errorLogger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        errorLogger.LogError(ex, "💥 An error occurred while migrating the database.");
     }
 }
 
-// Configure the HTTP request pipeline.
+// ============================================================
+// 9. HTTP PIPELINE CONFIGURATION
+// ============================================================
 if (app.Environment.IsDevelopment())
 {
     app.UseMigrationsEndPoint();
@@ -129,21 +141,113 @@ app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// --- Minimal API'ler (bunlar sendeydi, geri ekledim) ---
+// ============================================================
+// 10. MINIMAL API ENDPOINTS (Test & Debug)
+// ============================================================
+
+// Test endpoint - Task email gönderme testi
 app.MapGet("/api/test/task-email", async (
     HttpContext httpContext,
     ITaskLogicAppService taskLogicAppService,
     UserManager<IdentityUser> userManager,
     ILogger<Program> logger) =>
 {
-    // ... (Test endpoint kodların) ...
+    try
+    {
+        logger.LogInformation("🧪 Task email test endpoint called");
+
+        var userId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId))
+        {
+            logger.LogWarning("⚠️ Unauthorized access attempt");
+            return Results.Unauthorized();
+        }
+
+        var user = await userManager.FindByIdAsync(userId);
+        if (user?.Email == null)
+        {
+            logger.LogWarning("⚠️ User email not found for userId: {UserId}", userId);
+            return Results.BadRequest(new { error = "User email not found" });
+        }
+
+        logger.LogInformation("👤 Sending test email to: {Email}", user.Email);
+
+        var testTask = new TaskItem
+        {
+            Id = 999,
+            Title = "Test Task - Email Kontrolü",
+            Description = "Bu bir test e-postasıdır. Sistem düzgün çalışıyor.",
+            Status = GorevTakipUygulamasi.Models.TaskStatus.Tamamlandi,
+            CompletedDate = DateTime.Now,
+            UserId = userId
+        };
+
+        var success = await taskLogicAppService.SendTaskCompletionEmailAsync(
+            testTask,
+            user.Email,
+            user.UserName ?? user.Email.Split('@')[0]
+        );
+
+        if (success)
+        {
+            logger.LogInformation("✅ Test email sent successfully");
+            return Results.Ok(new
+            {
+                message = "Test email sent successfully",
+                recipient = user.Email,
+                taskTitle = testTask.Title
+            });
+        }
+        else
+        {
+            logger.LogError("❌ Failed to send test email");
+            return Results.Problem("Failed to send test email");
+        }
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "💥 Test email endpoint error");
+        return Results.Problem(ex.Message);
+    }
 }).RequireAuthorization();
 
-app.MapGet("/api/test/config", (IConfiguration config) =>
+// Config kontrol endpoint
+app.MapGet("/api/test/config", (IConfiguration config, ILogger<Program> logger) =>
 {
-    // ... (Test endpoint kodların) ...
+    try
+    {
+        logger.LogInformation("🔍 Config check endpoint called");
+
+        var taskUrl = config["LogicApp:TaskCompletionUrl"];
+        var storageConnection = config["AzureStorage:ConnectionString"];
+        var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+
+        var result = new
+        {
+            Environment = environment,
+            TaskCompletionUrlConfigured = !string.IsNullOrEmpty(taskUrl),
+            TaskUrlLength = taskUrl?.Length ?? 0,
+            TaskUrlPreview = !string.IsNullOrEmpty(taskUrl)
+                ? taskUrl.Substring(0, Math.Min(50, taskUrl.Length)) + "..."
+                : "NOT CONFIGURED",
+            AzureStorageConfigured = !string.IsNullOrEmpty(storageConnection),
+            StorageConnectionPreview = !string.IsNullOrEmpty(storageConnection)
+                ? storageConnection.Substring(0, Math.Min(50, storageConnection.Length)) + "..."
+                : "NOT CONFIGURED",
+            Timestamp = DateTime.Now
+        };
+
+        logger.LogInformation("✅ Config check completed");
+        return Results.Ok(result);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "💥 Config check error");
+        return Results.Problem(ex.Message);
+    }
 }).RequireAuthorization();
 
+// Manuel task completion email gönderme
 app.MapPost("/api/test/send-task-completion/{taskId:int}", async (
     int taskId,
     HttpContext httpContext,
@@ -152,14 +256,79 @@ app.MapPost("/api/test/send-task-completion/{taskId:int}", async (
     ApplicationDbContext context,
     ILogger<Program> logger) =>
 {
-    // ... (Test endpoint kodların) ...
-}).RequireAuthorization();
-// --- Minimal API'ler sonu ---
+    try
+    {
+        logger.LogInformation("📤 Manual task completion email request for taskId: {TaskId}", taskId);
 
+        var userId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId))
+        {
+            logger.LogWarning("⚠️ Unauthorized access attempt");
+            return Results.Unauthorized();
+        }
+
+        var task = await context.TaskItems
+            .FirstOrDefaultAsync(t => t.Id == taskId && t.UserId == userId);
+
+        if (task == null)
+        {
+            logger.LogWarning("⚠️ Task not found: {TaskId}", taskId);
+            return Results.NotFound(new { error = $"Task {taskId} not found" });
+        }
+
+        var user = await userManager.FindByIdAsync(userId);
+        if (user?.Email == null)
+        {
+            logger.LogWarning("⚠️ User email not found for userId: {UserId}", userId);
+            return Results.BadRequest(new { error = "User email not found" });
+        }
+
+        logger.LogInformation("📧 Sending completion email for task: {Title} to {Email}",
+            task.Title, user.Email);
+
+        var success = await taskLogicAppService.SendTaskCompletionEmailAsync(
+            task,
+            user.Email,
+            user.UserName ?? user.Email.Split('@')[0]
+        );
+
+        if (success)
+        {
+            logger.LogInformation("✅ Task completion email sent successfully");
+            return Results.Ok(new
+            {
+                message = $"Task completion email sent for task {taskId}",
+                taskTitle = task.Title,
+                recipient = user.Email
+            });
+        }
+        else
+        {
+            logger.LogError("❌ Failed to send task completion email");
+            return Results.Problem("Failed to send task completion email");
+        }
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "💥 Manual task completion email error");
+        return Results.Problem(ex.Message);
+    }
+}).RequireAuthorization();
+
+// ============================================================
+// 11. MAP ROUTES
+// ============================================================
 app.MapRazorPages();
 app.MapBlazorHub();
 app.MapFallbackToPage("/_Host");
 
-Console.WriteLine("🚀 GorevTakipUygulamasi başlatıldı! (v2 - Table Storage Mimarisi)");
+// ============================================================
+// 12. START APPLICATION
+// ============================================================
+var logger = app.Services.GetRequiredService<ILogger<Program>>();
+logger.LogInformation("🚀 GorevTakipUygulamasi başlatıldı!");
+logger.LogInformation("📦 Version: 2.0 (Table Storage Architecture)");
+logger.LogInformation("🌍 Environment: {Environment}", app.Environment.EnvironmentName);
+logger.LogInformation("🔗 URLs: {Urls}", string.Join(", ", app.Urls));
 
-app.Run(); // <-- UYGULAMAYI ÇALIŞTIRAN EN ÖNEMLİ KOMUT
+app.Run();

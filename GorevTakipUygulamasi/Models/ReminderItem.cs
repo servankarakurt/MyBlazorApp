@@ -108,7 +108,9 @@ namespace GorevTakipUygulamasi.Models
         // Uyumluluk için ek property'ler
         public DateTime ReminderTime
         {
-            get => DateTime.Parse($"{Date} {Time}");
+            // ------ DÜZELTME BURADA ------
+            // Azure SDK'sının istediği gibi UTC olarak BELİRT.
+            get => DateTime.SpecifyKind(DateTime.Parse($"{Date} {Time}"), DateTimeKind.Utc);
             set
             {
                 Date = value.ToString("yyyy-MM-dd");
@@ -118,7 +120,9 @@ namespace GorevTakipUygulamasi.Models
 
         public DateTime DueDate
         {
-            get => DateTime.Parse($"{Date} {Time}");
+            // ------ DÜZELTME BURADA ------
+            // Azure SDK'sının istediği gibi UTC olarak BELİRT.
+            get => DateTime.SpecifyKind(DateTime.Parse($"{Date} {Time}"), DateTimeKind.Utc);
             set
             {
                 Date = value.ToString("yyyy-MM-dd");

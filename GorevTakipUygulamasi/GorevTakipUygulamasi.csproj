@@ -8,14 +8,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="Pages\Reminders\ReminderPage.razor.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Content Include="Pages\Reminders\ReminderPage.razor.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="AspNet.Security.OAuth.GitHub" Version="6.0.15" />
     <PackageReference Include="Azure.Core" Version="1.47.1" />
     <PackageReference Include="Azure.Data.Tables" Version="12.11.0" />
